@@ -14,6 +14,8 @@ struct Predicate{
 	bool negated;
 	bool premise;
 	bool conclusion;
+	//Debug purpose
+	string rawFact;
 
 	Predicate()
 	:parameters(vector<string>()), negated(false), premise(false), conclusion(false)
@@ -29,7 +31,7 @@ struct Predicate{
 
 struct Sentence{
 	bool singleLiteral;
-	vector<Predicate*> premise;
+	vector<Predicate*> premises;
 	Predicate* conclusion;
 	//Debug purpoes
 	string rawFact;
@@ -46,6 +48,7 @@ class KB{
 		vector<string> rawFacts;	
 
 		unordered_map<string, unordered_map<string,vector<Sentence*>>> table;
+		unordered_map<string, Sentence*> rawTable;
 
 		void parse(string file)
 		{
@@ -76,7 +79,7 @@ class KB{
 			}
 		}
 
-		void processSingleLiteral(string rawFact, string originSentence)
+		void processSingleLiteral(string rawFact, string originSentence, bool isConclusion)
 		{
 			/* extract everything between the prentheses */
 			auto first_index = rawFact.find('(');
@@ -91,17 +94,46 @@ class KB{
 
 			/* end of parsing */
 
-			auto sentence = new Sentence();
-			sentence->singleLiteral = true;
-			sentence->conclusion = new Predicate();
-			sentence->conclusion->conclusion = true;
-			sentence->conclusion->negated = rawFact[0] == '~';
-			sentence->conclusion->parameters = params;
-			sentence->rawFact = originSentence;
+
+			/* if this literal belongs to the premises */
+			if(!isConclusion)
+			{
+				if(!rawTable.count(originSentence))
+				{
+					auto sentence = new Sentence();
+					rawTable[originSentence] = sentence;
+				}
+
+				rawTable[originSentence]->rawFact = originSentence;
+				auto premiseLiteral = new Predicate();
+				premiseLiteral->rawFact = originSentence;
+				premiseLiteral->premise = true;
+				premiseLiteral->parameters = params;
+				premiseLiteral->negated = rawFact[0] == '~';
+				rawTable[originSentence]->premises.push_back(premiseLiteral);
+			}
+			/* if this literal belongs to the conclusion */
+			else
+			{
+				if(!rawTable.count(originSentence))
+				{
+					auto sentence = new Sentence();
+					rawTable[originSentence] = sentence;
+					sentence->singleLiteral = true;
+				}
+
+				rawTable[originSentence]->rawFact = originSentence;
+				auto conclusionLiteral = new Predicate();
+				rawTable[originSentence]->conclusion = conclusionLiteral;
+				conclusionLiteral->negated = rawFact[0] == '~';
+				conclusionLiteral->parameters = params;
+				conclusionLiteral->conclusion = true;
+				conclusionLiteral->rawFact = originSentence;
+			}
 
 			string predicate = rawFact[0] == '~' ? rawFact.substr(1, first_index - 1) : rawFact.substr(0, first_index) ;
 			string sign = rawFact[0] == '~' ?  "Negative" : "Positive";
-			table[predicate][sign].push_back(sentence);
+			table[predicate][sign].push_back(rawTable[originSentence]);
 
 		}
 		void rawFactToTable(string rawFact)
@@ -125,21 +157,21 @@ class KB{
 						//trim off the lead whitespace
 						if(premise[0] == ' ')
 							premise = premise.substr(1);
-						processSingleLiteral(premise, rawFact);
+						processSingleLiteral(premise, rawFact, false);
 					}
 						
 				}
 				else
 				{
 					ss >> premise;
-					processSingleLiteral(premise, rawFact);
+					processSingleLiteral(premise, rawFact, false);
 				}
 					
 				/* Process conclusion */
-				processSingleLiteral(conclusion, rawFact);
+				processSingleLiteral(conclusion, rawFact, true);
 			}
 			else
-				processSingleLiteral(rawFact, rawFact);
+				processSingleLiteral(rawFact, rawFact, true);
 				
 		}
 
@@ -147,6 +179,11 @@ class KB{
 		{
 			for(auto fact : rawFacts)
 				rawFactToTable(fact);
+		}
+
+		vector<Sentence*> fetch(string predicate, string sign)
+		{
+			return table[predicate][sign];
 		}
 		
 };
@@ -159,9 +196,17 @@ int main()
 	kb.parse("input.txt");
 	kb.initialize();
 
-	auto results = kb.table["Learn"]["Positive"];	
-	for(auto r : results)
-		cout << r->rawFact << endl;
+	auto results = kb.fetch("Ready","Negative");	
+	// for(auto r : results)
+	// 	cout << r->rawFact << endl;
+
+	for(auto p : results.back()->premises)
+	{
+		for(auto param : p->parameters)
+			cout << param << " ";
+		cout << endl;
+	}
+
 
 	return 0;
 }
