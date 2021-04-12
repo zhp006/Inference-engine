@@ -14,6 +14,7 @@ struct Predicate{
 	bool negated;
 	bool premise;
 	bool conclusion;
+	string name;
 	//Debug purpose
 	string rawFact;
 
@@ -33,6 +34,7 @@ struct Sentence{
 	bool singleLiteral;
 	vector<Predicate*> premises;
 	Predicate* conclusion;
+	vector<Predicate*> allPredicates;
 	//Debug purpoes
 	string rawFact;
 
@@ -106,10 +108,11 @@ class KB{
 
 				rawTable[originSentence]->rawFact = originSentence;
 				auto premiseLiteral = new Predicate();
+				premiseLiteral->name = rawFact[0] == '~' ? rawFact.substr(1, first_index - 1) : rawFact.substr(0, first_index) ;
 				premiseLiteral->rawFact = originSentence;
 				premiseLiteral->premise = true;
 				premiseLiteral->parameters = params;
-				premiseLiteral->negated = rawFact[0] == '~';
+				premiseLiteral->negated = rawFact[0] != '~';
 				rawTable[originSentence]->premises.push_back(premiseLiteral);
 			}
 			/* if this literal belongs to the conclusion */
@@ -125,6 +128,7 @@ class KB{
 				rawTable[originSentence]->rawFact = originSentence;
 				auto conclusionLiteral = new Predicate();
 				rawTable[originSentence]->conclusion = conclusionLiteral;
+				conclusionLiteral->name = rawFact[0] == '~' ? rawFact.substr(1, first_index - 1) : rawFact.substr(0, first_index) ;
 				conclusionLiteral->negated = rawFact[0] == '~';
 				conclusionLiteral->parameters = params;
 				conclusionLiteral->conclusion = true;
@@ -132,7 +136,12 @@ class KB{
 			}
 
 			string predicate = rawFact[0] == '~' ? rawFact.substr(1, first_index - 1) : rawFact.substr(0, first_index) ;
-			string sign = rawFact[0] == '~' ?  "Negative" : "Positive";
+			string sign = "";
+			if(isConclusion)
+				sign = rawFact[0] == '~' ? "Negative" : "Positive";
+			else
+				sign = rawFact[0] == '~' ? "Positive" : "Negative";
+
 			table[predicate][sign].push_back(rawTable[originSentence]);
 
 		}
@@ -172,6 +181,14 @@ class KB{
 			}
 			else
 				processSingleLiteral(rawFact, rawFact, true);
+
+
+			//put premises and conclusion together
+			for(auto s : rawTable)
+			{
+				s.second->allPredicates = s.second->premises;
+				s.second->allPredicates.push_back(s.second->conclusion);
+			}
 				
 		}
 
@@ -181,11 +198,54 @@ class KB{
 				rawFactToTable(fact);
 		}
 
-		vector<Sentence*> fetch(string predicate, string sign)
+		vector<Predicate*> fetch(string predicate, string sign)
+		{
+			auto sentences = table[predicate][sign];
+			vector<Predicate*> result;
+			for(auto sentence : sentences)
+			{
+				if(!sentence->premises.empty())
+				{
+					for(auto p : sentence->premises)
+					{
+						if(p->name == predicate)
+							result.push_back(p);
+					}
+				}
+
+				if(sentence->conclusion->name == predicate)
+					result.push_back(sentence->conclusion);
+			}
+
+			return result;
+		}
+		
+		vector<Sentence*> fetchSentence(string predicate, string sign)
 		{
 			return table[predicate][sign];
 		}
-		
+
+		bool unify(Sentence* sentence, Predicate* predicate, int index)
+		{
+			unordered_map<string, string> lookup;
+			auto targetParams = sentence->allPredicates[index]->parameters;
+			auto currentParams = predicate->parameters;
+			for(int i = 0; i < targetParams.size(); i++)
+			{
+				//if(currentParams[i].size() == 1 && is)
+			}
+
+			return true;
+		}
+	
+
+		/*----------------------------------------------DEBUG FUNCTIONS---------------------------------------------- */
+		void printSentences(vector<Predicate*> results)
+		{
+			for(auto r : results)
+				cout << r->rawFact << endl;
+		}
+		/*----------------------------------------------DEBUG FUNCTIONS---------------------------------------------- */
 };
 
 
@@ -196,16 +256,12 @@ int main()
 	kb.parse("input.txt");
 	kb.initialize();
 
-	auto results = kb.fetch("Ready","Negative");	
-	// for(auto r : results)
-	// 	cout << r->rawFact << endl;
-
-	for(auto p : results.back()->premises)
-	{
-		for(auto param : p->parameters)
-			cout << param << " ";
-		cout << endl;
-	}
+	//auto results = kb.fetch("Learn","Negative");
+	auto results = kb.fetchSentence("Learn", "Negative");
+	for(auto p : results.front()->allPredicates)
+		cout << p->name << " ";
+	cout << endl;
+	//kb.printSentences(results);
 
 
 	return 0;
