@@ -225,16 +225,45 @@ class KB{
 			return table[predicate][sign];
 		}
 
+		bool isVariable(string s)
+		{
+			if(s.size() == 1)
+			{
+				char c = s[0];
+				if(islower(c))
+					return true;
+			}
+			return false;
+		}
 		bool unify(Sentence* sentence, Predicate* predicate, int index)
 		{
 			unordered_map<string, string> lookup;
 			auto targetParams = sentence->allPredicates[index]->parameters;
 			auto currentParams = predicate->parameters;
+
+			//build the look up table that store the variable and its correponding value
 			for(int i = 0; i < targetParams.size(); i++)
 			{
-				//if(currentParams[i].size() == 1 && is)
+				//if they have different constant in the same position then can't be unified
+				if(!isVariable(currentParams[i]) && !isVariable(targetParams[i]) && currentParams[i] != targetParams[i])
+					return false;
+				
+				if(isVariable(currentParams[i]) && !isVariable(targetParams[i]))
+					lookup[currentParams[i]] = targetParams[i];
+				else if(isVariable(targetParams[i]) && !isVariable(currentParams[i]))
+					lookup[targetParams[i]] = currentParams[i];
+					
 			}
 
+
+			for(auto p : sentence->allPredicates)
+			{
+				for(int i = 0; i < p->parameters.size(); i++)
+				{
+					if(isVariable(p->parameters[i]))
+						p->parameters[i] = lookup[p->parameters[i]];
+				}
+			}
 			return true;
 		}
 	
@@ -258,11 +287,30 @@ int main()
 
 	//auto results = kb.fetch("Learn","Negative");
 	auto results = kb.fetchSentence("Learn", "Negative");
-	for(auto p : results.front()->allPredicates)
+	for(auto p : results.back()->allPredicates)
+	{
 		cout << p->name << " ";
-	cout << endl;
+		for(auto param : p->parameters)
+			cout << param << " ";
+		cout << endl;
+	}
+
+	cout << "---------------" << endl;
+	Predicate* tmp = new Predicate;
+	tmp->name = "Ready";
+	tmp->parameters.push_back("first");
+	tmp->parameters.push_back("abc");
+	kb.unify(results.back(), tmp, 1);
 	//kb.printSentences(results);
 
+
+	for(auto p : results.back()->allPredicates)
+	{
+		cout << p->name << " ";
+		for(auto param : p->parameters)
+			cout << param << " ";
+		cout << endl;
+	}
 
 	return 0;
 }
