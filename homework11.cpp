@@ -92,7 +92,12 @@ class KB{
 			stringstream ss (rawParameters);
 			string param;
 			while(getline(ss, param, ','))
+			{
+				if(param[0] == ' ')
+					param = param.substr(1);
 				params.push_back(param);
+			}
+				
 
 			/* end of parsing */
 
@@ -267,6 +272,54 @@ class KB{
 			return true;
 		}
 	
+		bool ask(Predicate* predicate, string sign)
+		{
+			/*-------------------BASE CASE-------------------*/
+			
+			//Same sign
+			auto posSentence = fetchSentence(predicate->name, sign);
+			for(auto result : posSentence)
+			{
+				if(result->allPredicates.size() == 1 && result->allPredicates[0]->name == predicate->name && result->allPredicates[0]->negated == predicate->negated &&
+				result->allPredicates[0]->parameters == predicate->parameters)
+					return true;
+			}
+
+			string tmpSign = sign == "Positive" ? "Negative" : "Positive";
+			auto negSentence = fetchSentence(predicate->name, tmpSign);
+			for(auto result : negSentence)
+			{
+				if(result->allPredicates.size() == 1 && result->allPredicates[0]->name == predicate->name && result->allPredicates[0]->negated != predicate->negated &&
+				result->allPredicates[0]->parameters == predicate->parameters)
+					return false;
+			}
+
+			/*-------------------BASE CASE-------------------*/
+			auto results = fetchSentence(predicate->name, sign);
+			if(sign == "Positive")
+				predicate->negated = true;
+			else
+				predicate->negated = false;
+
+			for(auto result : results)
+			{
+				for(int i = 0; i < result->allPredicates.size(); i++)
+				{
+					if(result->allPredicates[i]->name == predicate->name)
+					{
+						auto origin = result->allPredicates;
+						if(unify(result, predicate, i))
+						{
+							//start to resolve
+							
+						}
+					}
+				}
+			}
+
+
+			return true;
+		}
 
 		/*----------------------------------------------DEBUG FUNCTIONS---------------------------------------------- */
 		void printSentences(vector<Predicate*> results)
@@ -285,32 +338,40 @@ int main()
 	kb.parse("input.txt");
 	kb.initialize();
 
+
+	Predicate* test = new Predicate();
+	test->name = "Ready";
+	test->negated = false;
+	test->parameters.push_back("Ares");
+	test->parameters.push_back("Bres");
+
+	cout << "test direct truth that negated the query" << endl;
+	cout << kb.ask(test, "Positive");
 	//auto results = kb.fetch("Learn","Negative");
-	auto results = kb.fetchSentence("Learn", "Negative");
-	for(auto p : results.back()->allPredicates)
-	{
-		cout << p->name << " ";
-		for(auto param : p->parameters)
-			cout << param << " ";
-		cout << endl;
-	}
+	// auto results = kb.fetchSentence("Learn", "Negative");
+	// for(auto p : results.back()->allPredicates)
+	// {
+	// 	cout << p->name << " ";
+	// 	for(auto param : p->parameters)
+	// 		cout << param << " ";
+	// 	cout << endl;
+	// }
 
-	cout << "---------------" << endl;
-	Predicate* tmp = new Predicate;
-	tmp->name = "Ready";
-	tmp->parameters.push_back("first");
-	tmp->parameters.push_back("abc");
-	kb.unify(results.back(), tmp, 1);
-	//kb.printSentences(results);
+	// cout << "---------------" << endl;
+	// Predicate* tmp = new Predicate;
+	// tmp->name = "Ready";
+	// tmp->parameters.push_back("first");
+	// tmp->parameters.push_back("abc");
+	// kb.unify(results.back(), tmp, 1);
 
 
-	for(auto p : results.back()->allPredicates)
-	{
-		cout << p->name << " ";
-		for(auto param : p->parameters)
-			cout << param << " ";
-		cout << endl;
-	}
+	// for(auto p : results.back()->allPredicates)
+	// {
+	// 	cout << p->name << " ";
+	// 	for(auto param : p->parameters)
+	// 		cout << param << " ";
+	// 	cout << endl;
+	// }
 
 	return 0;
 }
