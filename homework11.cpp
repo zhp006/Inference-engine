@@ -276,25 +276,24 @@ class KB{
 		{
 			/*-------------------BASE CASE-------------------*/
 			
-			//Same sign
-			auto posSentence = fetchSentence(predicate->name, sign);
-			for(auto result : posSentence)
-			{
-				if(result->allPredicates.size() == 1 && result->allPredicates[0]->name == predicate->name && result->allPredicates[0]->negated == predicate->negated &&
-				result->allPredicates[0]->parameters == predicate->parameters)
-					return true;
-			}
+			//looking for direct contradiction
 
+			//Same sign
 			string tmpSign = sign == "Positive" ? "Negative" : "Positive";
 			auto negSentence = fetchSentence(predicate->name, tmpSign);
 			for(auto result : negSentence)
 			{
 				if(result->allPredicates.size() == 1 && result->allPredicates[0]->name == predicate->name && result->allPredicates[0]->negated != predicate->negated &&
 				result->allPredicates[0]->parameters == predicate->parameters)
-					return false;
+				{
+					//found a contradiction, that means the original statement is true
+					return true;
+				}
+					
 			}
 
 			/*-------------------BASE CASE-------------------*/
+			
 			auto results = fetchSentence(predicate->name, sign);
 			if(sign == "Positive")
 				predicate->negated = true;
@@ -345,8 +344,11 @@ int main()
 	test->parameters.push_back("Ares");
 	test->parameters.push_back("Bres");
 
+	Predicate* negated_test = test;
+	negated_test->negated = true;
+
 	cout << "test direct truth that negated the query" << endl;
-	cout << kb.ask(test, "Positive");
+	cout << kb.ask(test, "Negative");
 	//auto results = kb.fetch("Learn","Negative");
 	// auto results = kb.fetchSentence("Learn", "Negative");
 	// for(auto p : results.back()->allPredicates)
