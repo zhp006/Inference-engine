@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <set>
 #include <fstream>
 #include <sstream>
@@ -247,6 +248,22 @@ class KB{
 			return nullptr;
 		}
 
+		string stringify(Sentence* sentence)
+		{
+			string output = "";
+			for(auto predicate : sentence->allPredicates)
+			{
+				string sign = predicate->negated ? "~" : "";
+				output += sign + predicate->name + "(";
+				for(auto param : predicate->parameters)
+					output += param + ",";
+				output.pop_back();
+				output += ")";
+				output += " ";
+			}
+			return output;
+		}
+
 		bool isVariable(string s)
 		{
 			if(s.size() == 1)
@@ -258,9 +275,36 @@ class KB{
 			return false;
 		}
 
+		Sentence* copySentence(Sentence* s)
+		{
+			Sentence* copy = new Sentence();
+
+			for(int i = 0; i < s->allPredicates.size(); i++)
+			{
+				Predicate* copy_p = new Predicate();
+				copy_p->parameters = s->allPredicates[i]->parameters;
+				copy_p->negated = s->allPredicates[i]->negated;
+				copy_p->name = s->allPredicates[i]->name;
+				copy_p->rawFact = s->allPredicates[i]->rawFact;
+
+				copy->allPredicates.push_back(copy_p);
+			}
+
+			return copy;
+			
+		}
 		bool unifiable(Predicate* p1, Predicate* p2)
 		{
 			if(p1->parameters.size() != p2->parameters.size())
+				return false;
+
+			bool containConstant = false;
+			for(auto p : p1->parameters)
+				if(!isVariable(p)) containConstant = true;
+			for(auto p : p2->parameters)
+				if(!isVariable(p)) containConstant = true;
+
+			if(!containConstant)
 				return false;
 
 			for(int i = 0; i < p1->parameters.size(); i++)
@@ -332,12 +376,13 @@ class KB{
 
 			Sentence* result = s1;
 			result->allPredicates.erase(result->allPredicates.begin() + index1);
-			Sentence* tmp = s2;
+			Sentence* tmp = new Sentence;
+			tmp->allPredicates = s2->allPredicates;
 			for(auto p : tmp->allPredicates)
 			{
 				for(int i = 0; i < p->parameters.size(); i++)
 				{
-					if(isVariable(p->parameters[i]))
+					if(isVariable(p->parameters[i]) && lookup.count(p->parameters[i]))
 						p->parameters[i] = lookup[p->parameters[i]];
 				}
 			}
@@ -352,7 +397,43 @@ class KB{
 			auto p1 = s1->allPredicates;
 			auto p2 = s2->allPredicates;
 
-			vector<Sentence*> result;
+			/* special case */
+			bool contradication = false;
+			bool flip = true;
+			if(p1.size() == 1 && p2.size() == 1)
+			{
+				if(p1[0]->name == p2[0]->name && p1[0]->negated != p2[0]->negated)
+				{
+					for(int i = 0; i < p1[0]->parameters.size(); i++)
+					{
+						if(isVariable(p1[0]->parameters[i]) || isVariable(p2[0]->parameters[i]))
+						{
+							flip = false;
+							break;
+						}
+							
+							
+						if(p1[0]->parameters[i] != p2[0]->parameters[i])
+						{
+							flip = false;
+							break;
+						}
+
+						if(flip)
+							contradication = true;	
+					}
+
+				}
+			}
+			if(contradication)
+			{
+				resolvents.push_back(nullptr);
+				return resolvents;
+			}
+				
+			/* end of special case */
+
+
 			for(int i = 0; i < p1.size(); i++)
 			{
 				for(int j = 0; j < p2.size(); j++)
@@ -360,7 +441,14 @@ class KB{
 					if(p1[i]->name == p2[j]->name && p1[i]->negated != p2[j]->negated)
 					{
 						if(unifiable(p1[i], p2[j]))
-							result.push_back(unification(s1, s2, i,j));
+						{
+							auto tmp1 = copySentence(s1);
+							auto tmp2 = copySentence(s2);
+
+							auto result = unification(tmp1, tmp2, i,j);
+							resolvents.push_back(result);
+						}
+							
 					}
 				}
 			}
@@ -374,7 +462,12 @@ class KB{
 			append->allPredicates.push_back(predicate);
 			clauses.push_back(append);
 
-			vector<Sentence*> newSentence;
+			unordered_set<string> clausesStr;
+			for(auto c : clauses)
+				clausesStr.insert(stringify(c));
+				
+
+			unordered_set<string> newSentence;
 
 			int count = 0;
 			int depth = 100;
@@ -388,16 +481,37 @@ class KB{
 						if(resolvents.empty())
 							continue;
 
+
 						for(auto r : resolvents)
 						{
 							if(r == nullptr)
 								return true;
+								
+							newSentence.insert(stringify(r));
 						}
+
+
 					}
 				}
+
+				bool isSubset = true;
+				for(auto n : newSentence)
+				{
+					if(!clausesStr.count(n))
+					{
+						isSubset = false;
+						clausesStr.insert(n);
+					}
+				}
+
+				if(isSubset)
+				{
+					cout << "hit" << endl;
+					return false;
+				}
+					
 				count++;
 			}
-
 
 			return true;
 		}
@@ -574,16 +688,12 @@ int main()
 
 
 	Predicate* test = new Predicate();
-	test->name = "Play";
-	test->negated = false;
-	test->parameters.push_back("Hayley");
-	test->parameters.push_back("Teddy");
+	test->name = "Learn";
+	test->negated = true;
+	test->parameters.push_back("Sit");
+	test->parameters.push_back("Ares");
 
-	Predicate* negated_test = test;
-	negated_test->negated = true;
-
-	//cout << "test direct truth that negated the query" << endl;
-
+	cout << kb.resolution(test) << endl;
 
 
 	//cout << kb.unifiable(test, test2) << endl;
