@@ -293,6 +293,20 @@ class KB{
 			return copy;
 			
 		}
+
+		bool haveCommonPredicate(Sentence* s1, Sentence* s2)
+		{
+			unordered_set<string> predicates;
+			for(auto p : s1->allPredicates)
+				predicates.insert(p->name);
+			for(auto p : s2->allPredicates)
+			{
+				if(predicates.count(p->name))
+					return true;
+			}
+			return false;
+		}
+
 		bool unifiable(Predicate* p1, Predicate* p2)
 		{
 			if(p1->parameters.size() != p2->parameters.size())
@@ -373,21 +387,49 @@ class KB{
 					lookup[targetParams[i]] = currentParams[i];
 			}
 
+			Sentence* result;
+			Sentence* copy_s1 = copySentence(s1);
+			Sentence* copy_s2 = copySentence(s2);
+			copy_s1->allPredicates.erase(copy_s1->allPredicates.begin() + index1);
+			copy_s2->allPredicates.erase(copy_s2->allPredicates.begin() + index2);
 
-			Sentence* result = s1;
-			result->allPredicates.erase(result->allPredicates.begin() + index1);
-			Sentence* tmp = new Sentence;
-			tmp->allPredicates = s2->allPredicates;
-			for(auto p : tmp->allPredicates)
+			for(auto p : copy_s1->allPredicates)
 			{
-				for(int i = 0; i < p->parameters.size(); i++)
+				for(int i = 0; i <  p->parameters.size(); i++)
 				{
 					if(isVariable(p->parameters[i]) && lookup.count(p->parameters[i]))
 						p->parameters[i] = lookup[p->parameters[i]];
 				}
 			}
-			tmp->allPredicates.erase(tmp->allPredicates.begin() + index2);
-			result->allPredicates.insert(result->allPredicates.end(), tmp->allPredicates.begin(), tmp->allPredicates.end());
+			for(auto p : copy_s2->allPredicates)
+			{
+				for(int i = 0; i <  p->parameters.size(); i++)
+				{
+					if(isVariable(p->parameters[i]) && lookup.count(p->parameters[i]))
+						p->parameters[i] = lookup[p->parameters[i]];
+				}
+			}
+
+			result = copy_s1;
+			result->allPredicates.insert(result->allPredicates.end(), copy_s2->allPredicates.begin(), copy_s2->allPredicates.end());
+
+			/*ORIGIN*/
+			// Sentence* result = s1;
+			// result->allPredicates.erase(result->allPredicates.begin() + index1);
+			// Sentence* tmp = new Sentence;
+			// tmp->allPredicates = s2->allPredicates;
+			// for(auto p : tmp->allPredicates)
+			// {
+			// 	for(int i = 0; i < p->parameters.size(); i++)
+			// 	{
+			// 		if(isVariable(p->parameters[i]) && lookup.count(p->parameters[i]))
+			// 			p->parameters[i] = lookup[p->parameters[i]];
+			// 	}
+			// }
+			// tmp->allPredicates.erase(tmp->allPredicates.begin() + index2);
+			// result->allPredicates.insert(result->allPredicates.end(), tmp->allPredicates.begin(), tmp->allPredicates.end());
+			/*ORIGIN*/
+
 			return result;
 		}
 
@@ -419,9 +461,10 @@ class KB{
 							break;
 						}
 
-						if(flip)
-							contradication = true;	
+
 					}
+					if(flip)
+						contradication = true;	
 
 				}
 			}
@@ -460,19 +503,29 @@ class KB{
 			vector<Sentence*> clauses = cvt2CNF();
 			Sentence* append = new Sentence;
 			append->allPredicates.push_back(predicate);
-			clauses.push_back(append);
+			clauses.insert(clauses.begin(), append);
 
 			unordered_set<string> clausesStr;
 			for(auto c : clauses)
 				clausesStr.insert(stringify(c));
 				
 
-			unordered_set<string> newSentence;
+			unordered_map<string, Sentence*> newSentence;
 
+			/*DEBUG*/
+			// cout << "current clauses: " << endl;
+			// cout << "-----------------------------------" << endl;
+			// for(auto c : clauses)
+			// 	cout << stringify(c) << endl;
+			// cout << "-----------------------------------" << endl;
+			/*DEBUG*/
+
+			unordered_set<string> compared;
 			int count = 0;
-			int depth = 100;
+			int depth = 1000;
 			while(count < depth)
 			{
+				/* ORIGIN */
 				for(int i = 0; i < clauses.size() - 1; i++)
 				{
 					for(int j = i + 1; j < clauses.size(); j++)
@@ -481,35 +534,34 @@ class KB{
 						if(resolvents.empty())
 							continue;
 
-
 						for(auto r : resolvents)
 						{
 							if(r == nullptr)
 								return true;
-								
-							newSentence.insert(stringify(r));
-						}
 
+							newSentence[stringify(r)] = r;
+						}
 
 					}
 				}
+
+				/* ORIGIN */
 
 				bool isSubset = true;
 				for(auto n : newSentence)
 				{
-					if(!clausesStr.count(n))
+					if(!clausesStr.count(n.first))
 					{
 						isSubset = false;
-						clausesStr.insert(n);
+						clausesStr.insert(n.first);
+						clauses.push_back(n.second);
 					}
 				}
 
 				if(isSubset)
-				{
-					cout << "hit" << endl;
 					return false;
-				}
-					
+				
+
 				count++;
 			}
 
@@ -688,10 +740,10 @@ int main()
 
 
 	Predicate* test = new Predicate();
-	test->name = "Learn";
+	test->name = "Play";
 	test->negated = true;
-	test->parameters.push_back("Sit");
 	test->parameters.push_back("Ares");
+	test->parameters.push_back("Hayley");
 
 	cout << kb.resolution(test) << endl;
 
