@@ -707,26 +707,26 @@ int main()
 	kb.initialize();
 	kb.origin = kb.table;
 
-	time_t before = time(nullptr);
-
+	vector<int> results;
 	for(auto q : kb.senQueries)
 	{
 		q->negated = !q->negated;
-		cout << kb.resolution(q) << endl;
+		results.push_back(kb.resolution(q));
+		// cout << kb.resolution(q) << endl;
 	}
 		
+	ofstream output;
+	output.open("output.txt");
+	for(auto r : results)
+	{
+		if(r)
+			output << "TRUE" << endl;
+		else
+			output << "FALSE" << endl;
+	}
 
-
-
-	
-	//cout << kb.resolution(test) << endl;
-	time_t after = time(nullptr);
-
-	cout << "seconds elapsed: ";
-	cout << after - before << endl;
-	//cout << kb.unifiable(test, test2) << endl;
-	//kb.resolution(negated_test);
-
+	output.close();
+		
 
 	return 0;
 }
