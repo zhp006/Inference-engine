@@ -6,6 +6,7 @@
 #include <set>
 #include <fstream>
 #include <sstream>
+#include <ctime>
 
 using namespace std;
 
@@ -50,7 +51,9 @@ class KB{
 		vector<string> queries;
 		vector<string> rawFacts;	
 
+		vector<Predicate*> senQueries;
 		unordered_map<string, unordered_map<string,vector<Sentence*>>> table;
+		unordered_map<string, unordered_map<string,vector<Sentence*>>> origin;
 		unordered_map<string, Sentence*> rawTable;
 
 		void parse(string file)
@@ -198,10 +201,39 @@ class KB{
 				
 		}
 
+		Predicate* stringToPredicate(string s)
+		{
+			auto first_index = s.find('(');
+			auto second_index = s.find(')');
+			string rawParameters = s.substr(first_index+1, second_index - first_index - 1);
+
+			vector<string> params;
+			stringstream ss (rawParameters);
+			string param;
+			while(getline(ss, param, ','))
+			{
+				if(param[0] == ' ')
+					param = param.substr(1);
+				params.push_back(param);
+			}
+
+			Predicate* predicate = new Predicate();
+
+			predicate->name = s[0] == '~' ? s.substr(1, first_index - 1) : s.substr(0, first_index);
+			predicate->negated = s[0] == '~';
+			predicate->parameters = params;
+			predicate->rawFact = s;
+
+			return predicate;
+	}
+
 		void initialize()
 		{
 			for(auto fact : rawFacts)
 				rawFactToTable(fact);
+			
+			for(auto query : queries)
+				senQueries.push_back(stringToPredicate(query));
 		}
 
 		vector<Predicate*> fetch(string predicate, string sign)
@@ -413,22 +445,6 @@ class KB{
 			result = copy_s1;
 			result->allPredicates.insert(result->allPredicates.end(), copy_s2->allPredicates.begin(), copy_s2->allPredicates.end());
 
-			/*ORIGIN*/
-			// Sentence* result = s1;
-			// result->allPredicates.erase(result->allPredicates.begin() + index1);
-			// Sentence* tmp = new Sentence;
-			// tmp->allPredicates = s2->allPredicates;
-			// for(auto p : tmp->allPredicates)
-			// {
-			// 	for(int i = 0; i < p->parameters.size(); i++)
-			// 	{
-			// 		if(isVariable(p->parameters[i]) && lookup.count(p->parameters[i]))
-			// 			p->parameters[i] = lookup[p->parameters[i]];
-			// 	}
-			// }
-			// tmp->allPredicates.erase(tmp->allPredicates.begin() + index2);
-			// result->allPredicates.insert(result->allPredicates.end(), tmp->allPredicates.begin(), tmp->allPredicates.end());
-			/*ORIGIN*/
 
 			return result;
 		}
@@ -476,7 +492,6 @@ class KB{
 				
 			/* end of special case */
 
-
 			for(int i = 0; i < p1.size(); i++)
 			{
 				for(int j = 0; j < p2.size(); j++)
@@ -498,6 +513,31 @@ class KB{
 			return resolvents;
 		}
 
+		void tell(Sentence* s)
+		{
+			for(auto p : s->allPredicates)
+			{
+				string sign = p->negated ? "Negative" : "Positive";
+				table[p->name][sign].push_back(s);
+			}
+		}
+
+		bool loopCheck(Sentence* s1, Sentence* s2)
+		{
+			unordered_set<string> table;
+			for(auto p1 : s1->allPredicates)
+			{
+				for(auto p2 : s2->allPredicates)
+				{
+					if(p1->name == p2->name && p1->negated != p2->negated)
+						table.insert(p1->name);
+					if(table.size() >= 2)
+						return false;
+				}
+			}
+			return true;
+		}
+
 		bool resolution(Predicate* predicate)
 		{
 			vector<Sentence*> clauses = cvt2CNF();
@@ -512,24 +552,21 @@ class KB{
 
 			unordered_map<string, Sentence*> newSentence;
 
-			/*DEBUG*/
-			// cout << "current clauses: " << endl;
-			// cout << "-----------------------------------" << endl;
-			// for(auto c : clauses)
-			// 	cout << stringify(c) << endl;
-			// cout << "-----------------------------------" << endl;
-			/*DEBUG*/
-
-			unordered_set<string> compared;
+			set<pair<int, int>> compared;
 			int count = 0;
 			int depth = 1000;
 			while(count < depth)
 			{
 				/* ORIGIN */
+
 				for(int i = 0; i < clauses.size() - 1; i++)
 				{
 					for(int j = i + 1; j < clauses.size(); j++)
 					{
+						auto cmp = make_pair(i, j);
+						if(compared.count(cmp) || !loopCheck(clauses[i], clauses[j]))
+							continue;
+						compared.insert(cmp);
 						vector<Sentence*> resolvents = resolve(clauses[i], clauses[j]);
 						if(resolvents.empty())
 							continue;
@@ -555,6 +592,7 @@ class KB{
 						isSubset = false;
 						clausesStr.insert(n.first);
 						clauses.push_back(n.second);
+						tell(n.second);
 					}
 				}
 
@@ -568,104 +606,6 @@ class KB{
 			return true;
 		}
 
-		bool ask(Predicate* predicate, string sign)
-		{
-			/*-------------------BASE CASE-------------------*/
-			
-			//looking for direct contradiction
-			cout << "called with ";
-			printPredicate(predicate);
-			//Same sign
-			// auto posSentence = fetchSentence(predicate->name, sign);
-			// for(auto result : posSentence)
-			// {
-			// 	if(result->allPredicates.size() == 1 && result->allPredicates[0]->name == predicate->name && result->allPredicates[0]->negated == predicate->negated &&
-			// 	result->allPredicates[0]->parameters == predicate->parameters)
-			// 	{
-			// 		//found exact match means the original one contradicates the fact so return false
-			// 		return false;
-			// 	}
-					
-			// }
-
-			string tmpSign = sign == "Positive" ? "Negative" : "Positive";
-			auto negSentence = fetchSentence(predicate->name, tmpSign);
-			for(auto result : negSentence)
-			{
-				if(result->allPredicates.size() == 1 && result->allPredicates[0]->name == predicate->name && result->allPredicates[0]->negated != predicate->negated &&
-				result->allPredicates[0]->parameters == predicate->parameters)
-				{
-					//found a contradiction, that means the original statement is true
-					return true;
-				}
-					
-			}
-
-			/*-------------------BASE CASE-------------------*/
-
-
-			string opSign = sign == "Negative" ? "Positive" : "Negative";
-			auto results = fetchSentence(predicate->name, opSign);
-
-			for(auto result : results)
-			{
-				for(int i = 0; i < result->allPredicates.size(); i++)
-				{
-					if(result->allPredicates[i]->name == predicate->name)
-					{
-						auto origin = result->allPredicates;
-						if(unify(result, predicate, i))
-						{
-							cout << "choice of sentence: " << result->rawFact << endl;
-							cout << "choice of predicate: " << predicate->name << "(";
-							for(auto param : predicate->parameters)
-								cout << param << " ";
-							cout << ")" << endl;
-							cout << "after unification: " << endl;
-							printKB();
-
-							//start to resolve
-							result->allPredicates.erase(result->allPredicates.begin() + i);
-							if(result->allPredicates.size() == 1)
-							{
-								string subSign = result->allPredicates[0]->negated == true ? "Negative" : "Positive";
-								if(ask(result->allPredicates[0], subSign))
-									return true;
-							}
-							else
-							{
-								//traverse the KB and find the sentence with only one predicate
-								Sentence* next = fetchOnlyPredicateInSentence();
-								if(next)
-								{
-									cout << "next predicate: " << endl;
-									printPredicate(next->allPredicates[0]);
-									auto saveCopy = next->allPredicates[0];
-									next->allPredicates.pop_back();
-
-									string subSign = saveCopy->negated == true ? "Negative" : "Positive";
-									if(ask(saveCopy, subSign))
-										return true;
-
-									//back track
-									cout << "pushing back: " ;
-									printPredicate(saveCopy);
-									next->allPredicates.push_back(saveCopy);
-										
-								}
-								return false;
-							}
-						}
-
-						//Back track
-						result->allPredicates = origin;
-					}
-				}
-			}
-
-
-			return false;
-		}
 
 		/*----------------------------------------------DEBUG FUNCTIONS---------------------------------------------- */
 		void printSentence(Sentence* sentence)
@@ -716,6 +656,34 @@ class KB{
 
 			cout << "--------------------- End of KB ---------------------" << endl;
 		}
+		
+		void printAnyKB(unordered_map<string, unordered_map<string,vector<Sentence*>>> table)
+		{
+			cout << "--------------------- KB ---------------------" << endl;
+			for(auto p : table)
+			{
+				for(auto innerTalbe : p.second)
+				{
+					for(auto sentence : innerTalbe.second)
+					{
+						for(auto predicate : sentence->allPredicates)
+						{
+							string output = "";
+							string sign = predicate->negated ? "~" : "";
+							output += sign + predicate->name + "(";
+							for(auto param : predicate->parameters)
+								output += param + ",";
+							output.pop_back();
+							output += ")";
+							cout << output << " ";
+						}
+						cout << endl;
+					}
+				}
+			}
+
+			cout << "--------------------- End of KB ---------------------" << endl;
+		}
 
 		void printPredicate(Predicate* predicate)
 		{
@@ -737,17 +705,25 @@ int main()
 
 	kb.parse("input.txt");
 	kb.initialize();
+	kb.origin = kb.table;
+
+	time_t before = time(nullptr);
+
+	for(auto q : kb.senQueries)
+	{
+		q->negated = !q->negated;
+		cout << kb.resolution(q) << endl;
+	}
+		
 
 
-	Predicate* test = new Predicate();
-	test->name = "Play";
-	test->negated = true;
-	test->parameters.push_back("Ares");
-	test->parameters.push_back("Hayley");
 
-	cout << kb.resolution(test) << endl;
+	
+	//cout << kb.resolution(test) << endl;
+	time_t after = time(nullptr);
 
-
+	cout << "seconds elapsed: ";
+	cout << after - before << endl;
 	//cout << kb.unifiable(test, test2) << endl;
 	//kb.resolution(negated_test);
 
