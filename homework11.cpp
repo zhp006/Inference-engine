@@ -85,6 +85,21 @@ class KB{
 			}
 		}
 
+		void cleanKB()
+		{
+			for(auto p : table)
+			{
+				for(auto innerTalbe : p.second)
+				{
+					for(auto sentence : innerTalbe.second)
+					{
+						free(sentence);
+					}
+				}
+			}
+
+		}
+
 		void processSingleLiteral(string rawFact, string originSentence, bool isConclusion)
 		{
 			/* extract everything between the prentheses */
@@ -559,30 +574,88 @@ class KB{
 			{
 				/* ORIGIN */
 
-				for(int i = 0; i < clauses.size() - 1; i++)
+				// for(int i = 0; i < clauses.size() - 1; i++)
+				// {
+				// 	for(int j = i + 1; j < clauses.size(); j++)
+				// 	{
+				// 		auto cmp = make_pair(i, j);
+				// 		if(compared.count(cmp) || !loopCheck(clauses[i], clauses[j]))
+				// 			continue;
+				// 		compared.insert(cmp);
+
+				// 		time_t before = time(nullptr);
+				// 		vector<Sentence*> resolvents = resolve(clauses[i], clauses[j]);
+				// 		time_t after = time(nullptr);
+				// 		int diff = after - before;
+				// 		if(diff)
+				// 			cout << "time for resolve: " << diff << endl;
+						
+				// 		if(resolvents.empty())
+				// 			continue;
+
+				// 		for(auto r : resolvents)
+				// 		{
+				// 			if(r == nullptr)
+				// 				return true;
+
+				// 			newSentence[stringify(r)] = r;
+				// 		}
+
+				// 	}
+				// }
+
+				/* ORIGIN */
+				
+				set<string> strCompared;
+				set<pair<Sentence*, Sentence*>> ptrCompared;
+				for(auto c : clauses)
 				{
-					for(int j = i + 1; j < clauses.size(); j++)
+
+					for(auto p : c->allPredicates)
 					{
-						auto cmp = make_pair(i, j);
-						if(compared.count(cmp) || !loopCheck(clauses[i], clauses[j]))
-							continue;
-						compared.insert(cmp);
-						vector<Sentence*> resolvents = resolve(clauses[i], clauses[j]);
-						if(resolvents.empty())
-							continue;
-
-						for(auto r : resolvents)
+						string sign = p->negated ? "Positive" : "Negative";
+						auto results = fetchSentence(p->name, sign);
+						for(auto r : results)
 						{
-							if(r == nullptr)
-								return true;
+							time_t before = time(nullptr);
+							//string cmp  = stringify(c) + stringify(r);
+							//string cmp2 = stringify(r) + stringify(c);
+							auto cmp = make_pair(c, r);
+							auto cmp2 = make_pair(r, c);
 
-							newSentence[stringify(r)] = r;
+							time_t after = time(nullptr);
+							int diff = after - before;
+							if(diff)
+								cout << "time for ptr make_pair: " << diff << endl;
+
+							// if(strCompared.count(cmp) || strCompared.count(cmp2) || !loopCheck(c, r))
+							// 	continue;
+							if(ptrCompared.count(cmp) || ptrCompared.count(cmp2) || !loopCheck(c, r))
+								continue;
+
+							ptrCompared.insert(cmp);
+							ptrCompared.insert(cmp2);
+							//strCompared.insert(cmp);
+							//strCompared.insert(cmp2);
+							vector<Sentence*> resolvents = resolve(c, r);
+
+							if(resolvents.empty())
+								continue;
+							
+							for(auto r : resolvents)
+							{
+								if(r == nullptr)
+									return true;
+									
+
+								newSentence[stringify(r)] = r;
+							}
+
+
 						}
-
 					}
 				}
 
-				/* ORIGIN */
 
 				bool isSubset = true;
 				for(auto n : newSentence)
@@ -598,6 +671,9 @@ class KB{
 
 				if(isSubset)
 					return false;
+					
+					
+					
 				
 
 				count++;
@@ -708,13 +784,19 @@ int main()
 	kb.origin = kb.table;
 
 	vector<int> results;
+	time_t before = time(nullptr);
 	for(auto q : kb.senQueries)
 	{
 		q->negated = !q->negated;
+		time_t funcBefore = time(nullptr);
 		results.push_back(kb.resolution(q));
+		time_t funcAfter = time(nullptr);
+		cout << "----------------------------func time: " << funcAfter - funcBefore << endl;
+		kb.table = kb.origin;
 		// cout << kb.resolution(q) << endl;
 	}
-		
+	time_t after = time(nullptr);
+	cout << "total: " << after - before << endl;
 	ofstream output;
 	output.open("output.txt");
 	for(auto r : results)
